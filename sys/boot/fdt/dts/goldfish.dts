@@ -1,0 +1,59 @@
+/*
+ * $FreeBSD: release/10.0.0/sys/boot/fdt/dts/goldfish.dts 
+ * 2014 Alexander Tarasikov <alexander.tarasikov@gmail.com>
+ */
+/dts-v1/;
+
+/ {
+	model = "ARM Goldfish (Android Emulator)";
+	compatible = "arm,goldfish";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	SOC: goldfish {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges;
+
+		pic: interrupt-controller {
+			compatible = "arm,goldfish-pic";
+			reg = <0xff000000 0x1000>;
+
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		uart0: uart0 {
+			compatible = "arm,goldfish-uart";
+			reg = <0xff002000 0x1000>;
+			interrupts = <4>;
+			interrupt-parent = <&pic>;
+			clock-frequency = <3000000>;
+			reg-shift = <2>;
+		};
+
+		timer0 {
+			compatible = "arm,goldfish-timer";
+			reg = <0xff003000 0x1000>;
+			interrupts = <3>;
+			interrupt-parent = <&pic>;
+		};
+
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0 0x08000000>; /* 128MB */
+	};
+
+	aliases {
+		uart0 = &uart0;
+	};
+
+	chosen {
+		bootargs = "-v";
+		stdin = "uart0";
+		stdout = "uart0";
+	};
+};
