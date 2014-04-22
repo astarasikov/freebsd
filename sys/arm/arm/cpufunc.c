@@ -1477,6 +1477,7 @@ set_cpufuncs()
 #endif /* CPU_ARM1136 || CPU_ARM1176 */
 #ifdef CPU_CORTEXA
 	if (cputype == CPU_ID_CORTEXA7 ||
+	    cputype == CPU_ID_CORTEXA8R0 ||
 	    cputype == CPU_ID_CORTEXA8R1 ||
 	    cputype == CPU_ID_CORTEXA8R2 ||
 	    cputype == CPU_ID_CORTEXA8R3 ||
