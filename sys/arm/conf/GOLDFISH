@@ -18,8 +18,9 @@
 # $FreeBSD: release/10.0.0/sys/arm/conf/GOLDFISH 254902 2013-08-26 10:27:15Z andrew $
 
 ident		GOLDFISH
+cpu			CPU_CORTEXA
 machine		arm	armv6
-cpu			CPU_ARM9EJS
+makeoptions ARM_LITTLE_ENDIAN
 
 files		"../goldfish/files.goldfish"
 makeoptions	MODULES_OVERRIDE=""

@@ -152,7 +152,7 @@ static int
 goldfish_timer_probe(device_t dev)
 {
 
-	if (ofw_bus_is_compatible(dev, "arm,goldfish")) {
+	if (ofw_bus_is_compatible(dev, "arm,goldfish-timer")) {
 		device_set_desc(dev, "Goldfish System Timer");
 		return (BUS_PROBE_DEFAULT);
 	}

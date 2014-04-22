@@ -30,15 +30,23 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/bus.h>
 #include <sys/cons.h>
 #include <sys/consio.h>
 #include <sys/kernel.h>
+#include <sys/module.h>
+#include <sys/rman.h>
 
-//XXX: write a proper UART driver with input support and UART1 multiplexing
+#include <machine/bus.h>
+#include <machine/intr.h>
 
-#define GOLDFISH_UART_BASE 0xff000000
+#include <dev/fdt/fdt_common.h>
+#include <dev/ofw/openfirm.h>
 
-enum goldfish_uart_regs {
+#include <dev/ofw/ofw_bus.h>
+#include <dev/ofw/ofw_bus_subr.h>
+
+enum goldfish_guart_regs {
     TTY_PUT_CHAR       = 0x00,
     TTY_BYTES_READY    = 0x04,
     TTY_CMD            = 0x08,
@@ -53,10 +61,77 @@ enum goldfish_uart_regs {
     TTY_CMD_READ_BUFFER    = 3,
 };
 
-static void
-uart_setreg(uint32_t *bas, uint32_t val)
+struct goldfish_guart_softc {
+	struct resource *	li_res;
+	bus_space_tag_t		li_bst;
+	bus_space_handle_t	li_bsh;
+};
+
+static int goldfish_guart_probe(device_t);
+static int goldfish_guart_attach(device_t);
+
+static struct goldfish_guart_softc *uart_softc = NULL;
+
+#define	uart_read_4(reg)		\
+    bus_space_read_4(uart_softc->li_bst, uart_softc->li_bsh, reg)
+#define	uart_write_4(reg, val)		\
+    bus_space_write_4(uart_softc->li_bst, uart_softc->li_bsh, reg, val)
+
+static int
+goldfish_guart_probe(device_t dev)
 {
-	*((volatile uint32_t *)(bas)) = val;
+
+	if (!ofw_bus_is_compatible(dev, "arm,goldfish-uart"))
+		return (ENXIO);
+
+	device_set_desc(dev, "Goldfish (Android Emulator) UART");
+	return (BUS_PROBE_DEFAULT);
+}
+
+static int
+goldfish_guart_attach(device_t dev)
+{
+	struct goldfish_guart_softc *sc = device_get_softc(dev);
+	int rid = 0;
+
+	if (uart_softc)
+		return (ENXIO);
+
+	sc->li_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid, 
+	    RF_ACTIVE);
+	if (!sc->li_res) {
+		device_printf(dev, "could not alloc resources\n");
+		return (ENXIO);
+	}
+
+	sc->li_bst = rman_get_bustag(sc->li_res);
+	sc->li_bsh = rman_get_bushandle(sc->li_res);
+	uart_softc = sc;
+	return (0);
+}
+
+static device_method_t goldfish_guart_methods[] = {
+	DEVMETHOD(device_probe,		goldfish_guart_probe),
+	DEVMETHOD(device_attach,	goldfish_guart_attach),
+	{ 0, 0 }
+};
+
+static driver_t goldfish_guart_driver = {
+	"guart",
+	goldfish_guart_methods,
+	sizeof(struct goldfish_guart_softc),
+};
+
+static devclass_t goldfish_guart_devclass;
+
+DRIVER_MODULE(guart, simplebus, goldfish_guart_driver, goldfish_guart_devclass, 0, 0);
+
+static void
+uart_setreg(uint32_t reg, uint32_t val)
+{
+	if (uart_softc) {
+		uart_write_4(reg, val);
+	}
 }
 
 static void
@@ -65,7 +140,7 @@ ub_putc(unsigned char c)
 	if (c == '\n')
 		ub_putc('\r');
 
-	uart_setreg((uint32_t *)(GOLDFISH_UART_BASE + TTY_PUT_CHAR), c);
+	uart_setreg(TTY_PUT_CHAR, c);
 }
 
 static cn_probe_t	uart_cnprobe;
@@ -102,7 +177,7 @@ uart_cnungrab(struct consdev *cp)
 static void
 uart_cnprobe(struct consdev *cp)
 {
-	sprintf(cp->cn_name, "uart");
+	sprintf(cp->cn_name, "uart_goldfish");
 	cp->cn_pri = CN_NORMAL;
 }
 

@@ -54,7 +54,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/fdt/fdt_common.h>
 
 /* Start of address space used for bootstrap map */
-#define DEVMAP_BOOTSTRAP_MAP_START	0xE0000000
+#define DEVMAP_BOOTSTRAP_MAP_START	0xF0000000
 
 vm_offset_t
 initarm_lastaddr(void)
@@ -90,9 +90,9 @@ platform_devmap_init(void)
 	/* Map goldfish virtual peripherals
 	 */
 
-	fdt_devmap[i].pd_va = DEVMAP_BOOTSTRAP_MAP_START;
+	fdt_devmap[i].pd_va = DEVMAP_BOOTSTRAP_MAP_START + 0xf000000;
 	fdt_devmap[i].pd_pa = 0xff000000;
-	fdt_devmap[i].pd_size = 0x01000000;       /* 1 MB */
+	fdt_devmap[i].pd_size = 0x100000;       /* 1 MB */
 	fdt_devmap[i].pd_prot = VM_PROT_READ | VM_PROT_WRITE;
 	fdt_devmap[i].pd_cache = PTE_DEVICE;
 

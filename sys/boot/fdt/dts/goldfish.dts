@@ -10,11 +10,12 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
-	SOC: goldfish {
+	amba {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
 		ranges;
+		bus-frequency = <0>;
 
 		pic: interrupt-controller {
 			compatible = "arm,goldfish-pic";
@@ -30,7 +31,7 @@
 			interrupts = <4>;
 			interrupt-parent = <&pic>;
 			clock-frequency = <3000000>;
-			reg-shift = <2>;
+			reg-shift = <0>;
 		};
 
 		timer0 {
@@ -53,7 +54,7 @@
 
 	chosen {
 		bootargs = "-v";
-		stdin = "uart0";
-		stdout = "uart0";
+		stdin = "uart_goldfish";
+		stdout = "uart_goldfish";
 	};
 };
