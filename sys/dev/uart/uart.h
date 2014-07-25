@@ -77,6 +77,7 @@ extern struct uart_class uart_cdnc_class __attribute__((weak));
 extern struct uart_class uart_ti8250_class __attribute__((weak));
 extern struct uart_class uart_vybrid_class __attribute__((weak));
 extern struct uart_class at91_usart_class __attribute__((weak));
+extern struct uart_class uart_goldfish_class __attribute__((weak));
 
 #ifdef FDT
 struct ofw_compat_data;

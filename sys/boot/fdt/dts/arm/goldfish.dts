@@ -1,0 +1,93 @@
+/*
+ * $FreeBSD$
+ * 2014 Alexander Tarasikov <alexander.tarasikov@gmail.com>
+ */
+/dts-v1/;
+
+/ {
+	model = "ARM Goldfish (Android Emulator)";
+	compatible = "arm,goldfish";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	amba {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges;
+		bus-frequency = <0>;
+
+		pic: interrupt-controller {
+			compatible = "arm,goldfish-pic";
+			reg = <0xff000000 0x1000>;
+
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		pdev {
+			compatible = "arm,goldfish-pdev";
+			reg = <0xff001000 0x1000>;
+			interrupts = <1>;
+			interrupt-parent = <&pic>;
+		};
+
+		uart0: uart0 {
+			compatible = "arm,goldfish-uart";
+			reg = <0xff002000 0x1000>;
+			interrupts = <4>;
+			interrupt-parent = <&pic>;
+			clock-frequency = <3000000>;
+			current-speed = <115200>;
+			reg-shift = <0>;
+		};
+
+		timer {
+			compatible = "arm,goldfish-timer";
+			reg = <0xff003000 0x1000>;
+			interrupts = <3>;
+			interrupt-parent = <&pic>;
+		};
+
+		mmc {
+			compatible = "arm,goldfish-mmc";
+			reg = <0xff005000 0x1000>;
+			interrupts = <15>;
+			interrupt-parent = <&pic>;
+			non-removable;
+			mmchs-device-id = <1>;
+			max-frequency = <24000000>;
+		};
+
+		smc {
+			compatible = "smsc,lan91c111";
+			reg = <0xff013000 0x1000>;
+			interrupts = <13>;
+			interrupt-parent = <&pic>;
+		};
+
+		fb {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "arm,goldfish-fbio";
+			reg = <0xff014000 0x1000>;
+			interrupts = <14>;
+			interrupt-parent = <&pic>;
+		};
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0 0x20000000>;
+	};
+
+	aliases {
+		uart0 = &uart0;
+	};
+
+	chosen {
+		bootargs = "-v bootverbose";
+		stdin = "uart0";
+		stdout = "uart0";
+	};
+};

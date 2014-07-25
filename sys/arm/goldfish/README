@@ -1,0 +1,70 @@
+What is Goldfish Board?
+	It is a virtual ARM board provided by the Android Emulator.
+
+What do I need to keep in mind when developing?
+	I have literally spent more than a month hunting down various MMU bugs
+	that prevented FreeBSD from booting successfully on a Goldfish board.
+
+	Turned out, Android Emulator's support for ARM1136 CPU lacked C13 CP15
+	register used for TLS and PCPU. Emulating TLS via a
+	memory page at 0xffff0000 did not help much. Anyway, the emulator
+	supports emulating an ARMv7-compatible Cortex A8.
+
+	I have not tracked down the exact difference in MMU management between
+	Linux and FreeBSD that caused random memory corruption on Goldfish. However,
+	it is known that FreeBSD works on QEMU with VERSATILEPB board. Unfortunately
+	the versions of Android Emulator from the SDK are based on an ancient QEMU
+	version that probably had some bug. Luckily, since Android-L preview release,
+	Google publishes prebuilt versions of Android Emulator from the latest source
+	code that do not have that bug. Please use the following the
+	"l-preview" branch from the following git repository:
+	https://android.googlesource.com/platform/prebuilts/android-emulator
+
+I can't find Android Emulator for FreeBSD!
+	Linux binaries work fine provided that you mount linprocfs at /proc
+	and install linux libraries (for example, linux_base-f10) including GTK.
+	Unfortunately it looks like prebuilt nightlies are 64-bit only
+	so you should try building one for FreeBSD natively.
+
+	>> git clone https://github.com/astarasikov/qemu.git
+	>> https://github.com/astarasikov/android_external_gtest
+	>> cd cd android_external_gtest
+	>> git checkout cm-11.0
+	>> cd ../qemu.git
+	>> git checkout l-preview-freebsd
+	>> bash android-build-freebsd.sh
+
+How to run?
+	Install Android SDK and create an Android Virtual Device with
+	an ARMv7 CPU (for example, Nexus 4) and 512MB RAM and sd card.
+
+	Then, copy Raspberry PI SD card image to
+	~/.android/avd/FreeBSD/sdcard.img
+
+	You are also advised to adjust SD card size in AVD settings
+	or sdcard.size in ~/.android/avd/FreeBSD/config.ini
+
+	>> emulator-arm -shell-serial stdio -show-kernel \
+	>> -shell -avd FreeBSD  -kernel ~/bsd/flash \
+	>> -qemu -hda ~/.android/avd/FreeBSD.avd/sdcard.img \
+	>> -cpu cortex-a8
+
+	(Actually, -hda and -cpu can be ommited if you configure them in
+	AVD settings)
+
+How to package the kernel?
+	The same way it is done for VERSATILEPB board
+
+	>> export KERN=/usr/obj/arm.armv6/usr/src/sys/GOLDFISH/kernel.bin
+
+	>> rm ./header ./flash
+
+	>> /usr/bin/printf "\0\0\240\343" > header
+	>> /usr/bin/printf "\0\020\240\343" >> header
+	>> /usr/bin/printf "\0\040\240\343" >> header
+	>> /usr/bin/printf "\0\060\240\343" >> header
+	>> /usr/bin/printf "\001\366\240\343" >> header
+
+	>> dd of=flash bs=1M count=4 if=/dev/zero
+	>> dd of=flash bs=1 conv=notrunc if=header
+	>> dd of=flash bs=64k oseek=15 conv=notrunc if=$KERN
