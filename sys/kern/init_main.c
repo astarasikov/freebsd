@@ -263,7 +263,7 @@ restart:
 			const char *func, *data;
 
 			func = symbol_name((vm_offset_t)(*sipp)->func,
-			    DB_STGY_PROC);
+			    DB_STGY_ANY);
 			data = symbol_name((vm_offset_t)(*sipp)->udata,
 			    DB_STGY_ANY);
 			if (func != NULL && data != NULL)
@@ -271,6 +271,15 @@ restart:
 			else if (func != NULL)
 				printf("   %s(%p)... ", func, (*sipp)->udata);
 			else
+			{
+			    printf("   ");
+				db_printsym((vm_offset_t)(*sipp)->func, DB_STGY_ANY);
+				printf("(&");
+				db_printsym((vm_offset_t)(*sipp)->udata, DB_STGY_ANY);
+				printf(")... ");
+			}
+
+			if (0)
 #endif
 				printf("   %p(%p)... ", (*sipp)->func,
 				    (*sipp)->udata);
