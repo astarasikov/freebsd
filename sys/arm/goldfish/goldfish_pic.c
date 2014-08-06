@@ -77,7 +77,7 @@ goldfish_pic_probe(device_t dev)
 	if (!ofw_bus_is_compatible(dev, "arm,goldfish-pic"))
 		return (ENXIO);
 
-	device_set_desc(dev, "Goldfish (Android Emulator) Interrupt Controller");
+	device_set_desc(dev, "Goldfish PIC");
 	return (BUS_PROBE_DEFAULT);
 }
 
@@ -92,10 +92,8 @@ goldfish_pic_attach(device_t dev)
 
 	sc->li_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid, 
 	    RF_ACTIVE);
-	if (!sc->li_res) {
-		device_printf(dev, "could not alloc resources\n");
+	if (!sc->li_res)
 		return (ENXIO);
-	}
 
 	sc->li_bst = rman_get_bustag(sc->li_res);
 	sc->li_bsh = rman_get_bushandle(sc->li_res);
@@ -103,6 +101,7 @@ goldfish_pic_attach(device_t dev)
 	arm_post_filter = goldfish_pic_eoi;
 
 	intc_write_4(GOLDFISH_PIC_DISABLE_ALL, 1);
+	intc_write_4(GOLDFISH_PIC_DISABLE_ALL, 0);
 	return (0);
 }
 
@@ -125,23 +124,28 @@ DRIVER_MODULE(pic, simplebus, goldfish_pic_driver, goldfish_pic_devclass, 0, 0);
 int
 arm_get_next_irq(int last)
 {
+	if (!intc_softc)
+		return (-1);
+
 	int rc = intc_read_4(GOLDFISH_PIC_NUMBER);
-	if (rc) {
+	if (rc > 0)
 		return (rc);
-	}
+
 	return (-1);
 }
 
 void
 arm_mask_irq(uintptr_t nb)
 {
-	intc_write_4(GOLDFISH_PIC_DISABLE, nb);
+	if (intc_softc)
+		intc_write_4(GOLDFISH_PIC_DISABLE, nb);
 }
 
 void
 arm_unmask_irq(uintptr_t nb)
 {
-	intc_write_4(GOLDFISH_PIC_ENABLE, nb);
+	if (intc_softc)
+		intc_write_4(GOLDFISH_PIC_ENABLE, nb);
 }
 
 static void
