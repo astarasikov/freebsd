@@ -1,0 +1,25 @@
+What is Goldfish Board?
+	It is a virtual ARM board provided by Android Emulator.
+
+What do I need to keep in mind?
+	I have literally spent more than a month hunting down various MMU bugs
+	that prevented FreeBSD from booting successfully on a Goldfish board.
+
+	Turned out, Android Emulator's support for ARM1136 CPU lacked C13 CP15
+	register used for TLS and PCPU. Emulating TLS via a
+	memory page at 0xffff0000 did not help much. Anyway, the emulator
+	supports emulating an ARMv7-compatible Cortex A8.
+
+	I have not tracked down the exact difference in MMU management between
+	Linux and FreeBSD that caused random memory corruption on Goldfish. However,
+	it is known that FreeBSD works on QEMU with VERSATILEPB board. Unfortunately
+	the versions of Android Emulator from the SDK are based on an ancient QEMU
+	version that probably had some bug. Luckily, since Android-L preview release,
+	Google publishes prebuilt versions of Android Emulator from the latest source
+	code that do not have that bug. Please use the following the 
+	"l-preview" branch from the following git repository:
+	https://android.googlesource.com/platform/prebuilts/android-emulator
+
+I can't find Android Emulator for FreeBSD!
+	Use the linux one. It works fine provided that you mount linprocfs at /proc
+	and install linux libraries (for example, linux_base-f10) including GTK
