@@ -147,6 +147,8 @@ uart_cpu_getdev(int devtype, struct uart_devinfo *di)
 		class = &uart_lpc_class;
 	else if (fdt_is_compatible(node, "arm,pl011"))
 		class = &uart_pl011_class;
+	else if (fdt_is_compatible(node, "arm,goldfish-uart"))
+		class = &uart_goldfish_class;
 	else if (fdt_is_compatible(node, "exynos"))
 		class = &uart_s3c2410_class;
 	else if (fdt_is_compatible(node, "cadence,uart"))

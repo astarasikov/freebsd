@@ -27,24 +27,21 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bus.h>
+#include <sys/conf.h>
 #include <sys/cons.h>
-#include <sys/consio.h>
-#include <sys/kernel.h>
-#include <sys/module.h>
+#include <sys/tty.h>
 #include <sys/rman.h>
-
 #include <machine/bus.h>
 #include <machine/intr.h>
 
-#include <dev/fdt/fdt_common.h>
-#include <dev/ofw/openfirm.h>
+#include <dev/uart/uart.h>
+#include <dev/uart/uart_cpu.h>
+#include <dev/uart/uart_bus.h>
 
-#include <dev/ofw/ofw_bus.h>
-#include <dev/ofw/ofw_bus_subr.h>
+#include "uart_if.h"
 
 enum goldfish_guart_regs {
     TTY_PUT_CHAR       = 0x00,
@@ -61,134 +58,183 @@ enum goldfish_guart_regs {
     TTY_CMD_READ_BUFFER    = 3,
 };
 
-struct goldfish_guart_softc {
-	struct resource *	li_res;
-	bus_space_tag_t		li_bst;
-	bus_space_handle_t	li_bsh;
+/*
+ * Low-level UART interface.
+ */
+static int goldfish_probe(struct uart_bas *bas);
+static void goldfish_init(struct uart_bas *bas, int, int, int, int);
+static void goldfish_term(struct uart_bas *bas);
+static void goldfish_putc(struct uart_bas *bas, int);
+static int goldfish_rxready(struct uart_bas *bas);
+static int goldfish_getc(struct uart_bas *bas, struct mtx *mtx);
+
+extern SLIST_HEAD(uart_devinfo_list, uart_devinfo) uart_sysdevs;
+
+struct uart_ops uart_goldfish_ops = {
+	.probe = goldfish_probe,
+	.init = goldfish_init,
+	.term = goldfish_term,
+	.putc = goldfish_putc,
+	.rxready = goldfish_rxready,
+	.getc = goldfish_getc,
 };
 
-static int goldfish_guart_probe(device_t);
-static int goldfish_guart_attach(device_t);
-
-static struct goldfish_guart_softc *uart_softc = NULL;
-
-#define	uart_read_4(reg)		\
-    bus_space_read_4(uart_softc->li_bst, uart_softc->li_bsh, reg)
-#define	uart_write_4(reg, val)		\
-    bus_space_write_4(uart_softc->li_bst, uart_softc->li_bsh, reg, val)
-
 static int
-goldfish_guart_probe(device_t dev)
+goldfish_probe(struct uart_bas *bas)
 {
-
-	if (!ofw_bus_is_compatible(dev, "arm,goldfish-uart"))
-		return (ENXIO);
-
-	device_set_desc(dev, "Goldfish (Android Emulator) UART");
-	return (BUS_PROBE_DEFAULT);
-}
-
-static int
-goldfish_guart_attach(device_t dev)
-{
-	struct goldfish_guart_softc *sc = device_get_softc(dev);
-	int rid = 0;
-
-	if (uart_softc)
-		return (ENXIO);
-
-	sc->li_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid, 
-	    RF_ACTIVE);
-	if (!sc->li_res) {
-		device_printf(dev, "could not alloc resources\n");
-		return (ENXIO);
-	}
-
-	sc->li_bst = rman_get_bustag(sc->li_res);
-	sc->li_bsh = rman_get_bushandle(sc->li_res);
-	uart_softc = sc;
 	return (0);
 }
 
-static device_method_t goldfish_guart_methods[] = {
-	DEVMETHOD(device_probe,		goldfish_guart_probe),
-	DEVMETHOD(device_attach,	goldfish_guart_attach),
-	{ 0, 0 }
-};
-
-static driver_t goldfish_guart_driver = {
-	"guart",
-	goldfish_guart_methods,
-	sizeof(struct goldfish_guart_softc),
-};
-
-static devclass_t goldfish_guart_devclass;
-
-DRIVER_MODULE(guart, simplebus, goldfish_guart_driver, goldfish_guart_devclass, 0, 0);
-
 static void
-uart_setreg(uint32_t reg, uint32_t val)
+goldfish_init(struct uart_bas *bas, int baudrate, int databits, int stopbits,
+    int parity)
 {
-	if (uart_softc) {
-		uart_write_4(reg, val);
-	}
 }
 
 static void
-ub_putc(unsigned char c)
+goldfish_term(struct uart_bas *bas)
 {
-	if (c == '\n')
-		ub_putc('\r');
-
-	uart_setreg(TTY_PUT_CHAR, c);
 }
 
-static cn_probe_t	uart_cnprobe;
-static cn_init_t	uart_cninit;
-static cn_term_t	uart_cnterm;
-static cn_getc_t	uart_cngetc;
-static cn_putc_t	uart_cnputc;
-static cn_grab_t	uart_cngrab;
-static cn_ungrab_t	uart_cnungrab;
-
-void
-uart_cnputc(struct consdev *cp, int c)
+static void
+goldfish_putc(struct uart_bas *bas, int c)
 {
-	ub_putc(c);
+	uart_setreg(bas, TTY_PUT_CHAR, c);
 }
 
-int
-uart_cngetc(struct consdev * cp)
+static int
+goldfish_rxready(struct uart_bas *bas)
 {
 	return 0;
+	//return (!!uart_getreg(bas, TTY_BYTES_READY));
 }
 
-static void
-uart_cngrab(struct consdev *cp)
+static int
+goldfish_getc(struct uart_bas *bas, struct mtx *mtx)
 {
+	int c = 0;
+	//uart_setreg(bas, TTY_DATA_PTR, (int)&c);
+	//uart_setreg(bas, TTY_DATA_LEN, 1);
+	//uart_setreg(bas, TTY_CMD, TTY_CMD_READ_BUFFER);
+	return c;
 }
 
-static void
-uart_cnungrab(struct consdev *cp)
+static int goldfish_bus_probe(struct uart_softc *sc);
+static int goldfish_bus_attach(struct uart_softc *sc);
+static int goldfish_bus_flush(struct uart_softc *, int);
+static int goldfish_bus_getsig(struct uart_softc *);
+static int goldfish_bus_ioctl(struct uart_softc *, int, intptr_t);
+static int goldfish_bus_ipend(struct uart_softc *);
+static int goldfish_bus_param(struct uart_softc *, int, int, int, int);
+static int goldfish_bus_receive(struct uart_softc *);
+static int goldfish_bus_setsig(struct uart_softc *, int);
+static int goldfish_bus_transmit(struct uart_softc *);
+
+static kobj_method_t goldfish_methods[] = {
+	KOBJMETHOD(uart_probe,		goldfish_bus_probe),
+	KOBJMETHOD(uart_attach, 	goldfish_bus_attach),
+	KOBJMETHOD(uart_flush,		goldfish_bus_flush),
+	KOBJMETHOD(uart_getsig,		goldfish_bus_getsig),
+	KOBJMETHOD(uart_ioctl,		goldfish_bus_ioctl),
+	KOBJMETHOD(uart_ipend,		goldfish_bus_ipend),
+	KOBJMETHOD(uart_param,		goldfish_bus_param),
+	KOBJMETHOD(uart_receive,	goldfish_bus_receive),
+	KOBJMETHOD(uart_setsig,		goldfish_bus_setsig),
+	KOBJMETHOD(uart_transmit,	goldfish_bus_transmit),
+
+	{0, 0 }
+};
+
+int
+goldfish_bus_probe(struct uart_softc *sc)
 {
+
+	sc->sc_txfifosz = 16;
+	sc->sc_rxfifosz = 16;
+
+	return (0);
 }
 
-
-static void
-uart_cnprobe(struct consdev *cp)
+static int
+goldfish_bus_attach(struct uart_softc *sc)
 {
-	sprintf(cp->cn_name, "uart_goldfish");
-	cp->cn_pri = CN_NORMAL;
+
+	sc->sc_hwiflow = 0;
+	sc->sc_hwoflow = 0;
+
+	return (0);
 }
 
-static void
-uart_cninit(struct consdev *cp)
+static int
+goldfish_bus_transmit(struct uart_softc *sc)
 {
+	int i;
+
+	//uart_lock(sc->sc_hwmtx);
+
+	for (i = 0; i < sc->sc_txdatasz; i++) {
+		goldfish_putc(&sc->sc_bas, sc->sc_txbuf[i]);
+		//uart_barrier(&sc->sc_bas);
+	}
+
+	//sc->sc_txbusy = 1;
+	//uart_unlock(sc->sc_hwmtx);
+
+	return (0);
 }
 
-static void
-uart_cnterm(struct consdev * cp)
+static int
+goldfish_bus_setsig(struct uart_softc *sc, int sig)
 {
+
+	return (0);
 }
 
-CONSOLE_DRIVER(uart);
+static int
+goldfish_bus_receive(struct uart_softc *sc)
+{
+	return (0);
+}
+
+static int
+goldfish_bus_param(struct uart_softc *sc, int baudrate, int databits,
+    int stopbits, int parity)
+{
+	return (0);
+}
+
+static int
+goldfish_bus_ipend(struct uart_softc *sc)
+{
+	return (0);
+}
+
+static int
+goldfish_bus_flush(struct uart_softc *sc, int what)
+{
+
+	return (0);
+}
+
+static int
+goldfish_bus_getsig(struct uart_softc *sc)
+{
+
+	return (0);
+}
+
+static int
+goldfish_bus_ioctl(struct uart_softc *sc, int request, intptr_t data)
+{
+
+	return (EINVAL);
+}
+
+struct uart_class uart_goldfish_class = {
+	"goldfish class",
+	goldfish_methods,
+	1,
+	.uc_ops = &uart_goldfish_ops,
+	.uc_range = 8,
+	.uc_rclk = 0,
+};
