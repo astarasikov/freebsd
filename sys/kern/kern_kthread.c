@@ -60,6 +60,7 @@ kproc_start(udata)
 	const struct kproc_desc	*kp = udata;
 	int error;
 
+	printf("kproc_start: %s\n", kp->arg0);
 	error = kproc_create((void (*)(void *))kp->func, NULL,
 		    kp->global_procpp, 0, 0, "%s", kp->arg0);
 	if (error)
