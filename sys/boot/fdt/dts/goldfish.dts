@@ -31,21 +31,37 @@
 			interrupts = <4>;
 			interrupt-parent = <&pic>;
 			clock-frequency = <3000000>;
+			current-speed = <115200>;
 			reg-shift = <0>;
 		};
 
-		timer0 {
+		timer {
 			compatible = "arm,goldfish-timer";
 			reg = <0xff003000 0x1000>;
 			interrupts = <3>;
 			interrupt-parent = <&pic>;
 		};
 
+		smc {
+			compatible = "smsc,lan91c111";
+			reg = <0xff013000 0x1000>;
+			interrupts = <13>;
+			interrupt-parent = <&pic>;
+		};
+
+		fb {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "arm,goldfish-fbio";
+			reg = <0xff014000 0x1000>;
+			interrupts = <14>;
+			interrupt-parent = <&pic>;
+		};
 	};
 
 	memory {
 		device_type = "memory";
-		reg = <0 0x08000000>; /* 128MB */
+		reg = <0x0 0x08000000>; /* 128MB */
 	};
 
 	aliases {
@@ -53,8 +69,8 @@
 	};
 
 	chosen {
-		bootargs = "-v";
-		stdin = "uart_goldfish";
-		stdout = "uart_goldfish";
+		bootargs = "-v bootverbose";
+		stdin = "uart0";
+		stdout = "uart0";
 	};
 };
