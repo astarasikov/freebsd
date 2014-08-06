@@ -50,8 +50,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/bus.h>
 #include <machine/fdt.h>
 
-//XXX: make it 64-bit :)
-
 enum {
 	GOLDFISH_TIMER_LOW = 0x0,
 	GOLDFISH_TIMER_HIGH = 0x4,
@@ -61,12 +59,7 @@ enum {
 	GOLDFISH_TIMER_CLEAR_ALARM = 0x14,
 };
 
-#define	DEFAULT_FREQUENCY	1000000
-/*
- * QEMU seems to have problem with full frequency
- */
-#define	DEFAULT_DIVISOR		16
-#define	DEFAULT_CONTROL_DIV	TIMER_CONTROL_DIV16
+#define CLOCK_TICK_RATE (1000 * 1000 * 1000)
 
 struct goldfish_timer_softc {
 	struct resource*	mem_res;
@@ -80,40 +73,49 @@ struct goldfish_timer_softc {
 	struct eventtimer	et;
 };
 
-/* Read/Write macros for Timer used as timecounter */
+static int goldfish_timer_initialized;
+static struct goldfish_timer_softc *goldfish_timer_sc;
+
 #define goldfish_timer_tc_read_4(reg)		\
 	bus_space_read_4(sc->bst, sc->bsh, reg)
 
 #define goldfish_timer_tc_write_4(reg, val)	\
 	bus_space_write_4(sc->bst, sc->bsh, reg, val)
 
-static unsigned goldfish_timer_tc_get_timecount(struct timecounter *);
+static uint64_t goldfish_timer_read_counter64(struct timecounter *);
+
+static uint64_t
+goldfish_timer_read_counter64(struct timecounter *tc) {
+	struct goldfish_timer_softc *sc = tc->tc_priv;
+	uint32_t lo, hi;
+	lo = goldfish_timer_tc_read_4(GOLDFISH_TIMER_LOW);
+	hi = goldfish_timer_tc_read_4(GOLDFISH_TIMER_HIGH);
+	return (((uint64_t)hi << 32) | lo);
+}
 
 static unsigned
 goldfish_timer_tc_get_timecount(struct timecounter *tc)
 {
-	struct goldfish_timer_softc *sc = tc->tc_priv;
-	unsigned timeval = goldfish_timer_tc_read_4(GOLDFISH_TIMER_LOW);
-	goldfish_timer_tc_read_4(GOLDFISH_TIMER_HIGH);
-	return 0xffffffff - timeval;
+	return (unsigned)(goldfish_timer_read_counter64(tc));
 }
 
 static int
 goldfish_timer_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
 {
 	struct goldfish_timer_softc *sc = et->et_priv;
-	uint32_t count;
+	uint64_t count;
 
 	if (first != 0) {
 		sc->et_enabled = 1;
-
-		count = ((uint32_t)et->et_frequency * first) >> 32;
-
-		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_HIGH, 0);
-		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_LOW, count);
-
+		count = ((uint64_t)et->et_frequency * first);
+		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_HIGH, count >> 32);
+		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_LOW, count & 0xffffffff);
 		return (0);
 	} 
+	else {
+		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_HIGH, 0);
+		goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_LOW, 0);
+	}
 
 	if (period != 0) {
 		panic("period");
@@ -139,11 +141,8 @@ goldfish_timer_intr(void *arg)
 	struct goldfish_timer_softc *sc = arg;
 	goldfish_timer_tc_write_4(GOLDFISH_TIMER_CLEAR_INTERRUPT, 1);
 
-	if (sc->et_enabled) {
-		if (sc->et.et_active) {
-			sc->et.et_event_cb(&sc->et, sc->et.et_arg);
-		}
-	}
+	if (sc->et_enabled && sc->et.et_active)
+		sc->et.et_event_cb(&sc->et, sc->et.et_arg);
 
 	return (FILTER_HANDLED);
 }
@@ -164,41 +163,35 @@ static int
 goldfish_timer_attach(device_t dev)
 {
 	struct goldfish_timer_softc *sc = device_get_softc(dev);
-	int rid = 0;
+	int mem_rid = 0, irq_rid = 0;
 
-	sc->mem_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid, RF_ACTIVE);
+	/* TODO: get frequency from FDT */
+	sc->sysclk_freq = CLOCK_TICK_RATE;
+
+	sc->mem_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &mem_rid, RF_ACTIVE);
 	if (sc->mem_res == NULL) {
-		device_printf(dev, "could not allocate memory resource\n");
-		return (ENXIO);
+		goto fail;
 	}
 
 	sc->bst = rman_get_bustag(sc->mem_res);
 	sc->bsh = rman_get_bushandle(sc->mem_res);
-
 	/* Request the IRQ resources */
-	sc->irq_res =  bus_alloc_resource_any(dev, SYS_RES_IRQ, &rid, RF_ACTIVE);
+	sc->irq_res =  bus_alloc_resource_any(dev, SYS_RES_IRQ, &irq_rid, RF_ACTIVE);
 	if (sc->irq_res == NULL) {
-		device_printf(dev, "Error: could not allocate irq resources\n");
-		return (ENXIO);
+		goto fail;
 	}
-
-	/* TODO: get frequency from FDT */
-	sc->sysclk_freq = DEFAULT_FREQUENCY;
 
 	/* Setup and enable the timer */
 	if (bus_setup_intr(dev, sc->irq_res, INTR_TYPE_CLK,
-			goldfish_timer_intr, NULL, sc,
-			&sc->intr_hl) != 0) {
-		bus_release_resource(dev, SYS_RES_IRQ, rid,
-			sc->irq_res);
-		device_printf(dev, "Unable to setup the clock irq handler.\n");
-		return (ENXIO);
+			goldfish_timer_intr, NULL, sc, &sc->intr_hl) != 0)
+	{
+		goto fail;
 	}
 
 	/*
 	 * Timer 1, timecounter
 	 */
-	sc->tc.tc_frequency = DEFAULT_FREQUENCY;
+	sc->tc.tc_frequency = CLOCK_TICK_RATE;
 	sc->tc.tc_name = "Goldfish Timecouter";
 	sc->tc.tc_get_timecount = goldfish_timer_tc_get_timecount;
 	sc->tc.tc_poll_pps = NULL;
@@ -206,35 +199,50 @@ goldfish_timer_attach(device_t dev)
 	sc->tc.tc_quality = 200;
 	sc->tc.tc_priv = sc;
 
-	goldfish_timer_tc_write_4(GOLDFISH_TIMER_CLEAR_ALARM, 1);
-	goldfish_timer_tc_write_4(GOLDFISH_TIMER_CLEAR_INTERRUPT, 1);
-
-	tc_init(&sc->tc);
-
 	/* 
 	 * Timer 2, event timer
 	 */
 	sc->et_enabled = 0;
-	sc->et.et_name = malloc(64, M_DEVBUF, M_NOWAIT | M_ZERO);
-	sprintf(sc->et.et_name, "Goldfish Event Timer %d",
-		device_get_unit(dev));
+	sc->et.et_name = "Goldfish Event Timer";
 	sc->et.et_flags = ET_FLAGS_PERIODIC | ET_FLAGS_ONESHOT;
+	sc->et.et_frequency = CLOCK_TICK_RATE;
 	sc->et.et_quality = 200;
-	sc->et.et_frequency = sc->sysclk_freq / DEFAULT_DIVISOR;
-	sc->et.et_min_period = (0x00000001LLU << 32) / sc->et.et_frequency;
-	sc->et.et_max_period = (0xffffffffLLU << 32) / sc->et.et_frequency;
+	sc->et.et_min_period = (0x00000002LLU << 32) / sc->et.et_frequency;
+	sc->et.et_max_period = (0xfffffffeLLU << 32) / sc->et.et_frequency;
 	sc->et.et_start = goldfish_timer_start;
 	sc->et.et_stop = goldfish_timer_stop;
 	sc->et.et_priv = sc;
+
+	goldfish_timer_tc_write_4(GOLDFISH_TIMER_CLEAR_ALARM, 1);
+	goldfish_timer_tc_write_4(GOLDFISH_TIMER_CLEAR_INTERRUPT, 1);
+
 	et_register(&sc->et);
+	tc_init(&sc->tc);
+
+	/* keep a global reference to sc to avoid lookup during DELAY */
+	goldfish_timer_sc = sc;
+	goldfish_timer_initialized = 1;
+
+	/* trigger an interrupt */
+	goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_HIGH, 0);
+	goldfish_timer_tc_write_4(GOLDFISH_TIMER_ALARM_LOW, 0);
 
 	return (0);
+
+fail:
+	if (sc->irq_res)
+		bus_release_resource(dev, SYS_RES_IRQ, irq_rid, sc->irq_res);
+
+	if (sc->mem_res)
+		bus_release_resource(dev, SYS_RES_MEMORY, mem_rid, sc->mem_res);
+
+	return (ENXIO);
 }
 
 static device_method_t goldfish_timer_methods[] = {
 	DEVMETHOD(device_probe,		goldfish_timer_probe),
 	DEVMETHOD(device_attach,	goldfish_timer_attach),
-	{ 0, 0 }
+	DEVMETHOD_END,
 };
 
 static driver_t goldfish_timer_driver = {
@@ -250,14 +258,11 @@ DRIVER_MODULE(goldfish_timer, simplebus, goldfish_timer_driver, goldfish_timer_d
 void
 DELAY(int usec)
 {
-	int32_t counts;
-	uint32_t first, last;
-	device_t timer_dev;
-	struct goldfish_timer_softc *sc;
+	uint64_t counts;
+	uint64_t now, end;
 
-	timer_dev = devclass_get_device(goldfish_timer_devclass, 0);
-
-	if (timer_dev == NULL) {
+	/* Let us uncomment this as soon as rootfs mounts and init starts */
+	if (!goldfish_timer_initialized || !goldfish_timer_sc) {
 		/*
 		 * Timer is not initialized yet
 		 */
@@ -268,27 +273,19 @@ DELAY(int usec)
 		return;
 	}
 
-	sc = device_get_softc(timer_dev);
-
 	/* Get the number of times to count */
-	counts = usec * ((sc->tc.tc_frequency / 1000000) + 1);
+	counts = usec * ((goldfish_timer_sc->tc.tc_frequency / 1000000) + 1);
 
-	first = goldfish_timer_tc_get_timecount(&sc->tc);
+	now = goldfish_timer_read_counter64(&goldfish_timer_sc->tc);
+	end = now + counts;
 
-	while (counts > 0) {
-		last = goldfish_timer_tc_get_timecount(&sc->tc);
-		if (last == first)
-			continue;
-		if (last>first) {
-			counts -= (int32_t)(last - first);
-		} else {
-			counts -= (int32_t)((0xFFFFFFFF - first) + last);
-		}
-		first = last;
+	while (now < end) {
+		now = goldfish_timer_read_counter64(&goldfish_timer_sc->tc);
 	}
 }
 
 void
 cpu_initclocks(void)
 {
+	cpu_initclocks_bsp();
 }
