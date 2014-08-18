@@ -11,7 +11,8 @@ kern/kern_clocksource.c                         standard
 arm/goldfish/bus_space.c			standard
 arm/goldfish/goldfish_machdep.c		standard
 
-arm/goldfish/goldfish_fb.c			optional sc
+#arm/goldfish/goldfish_fb.c			optional sc
+arm/goldfish/goldfish_mmc.c			optional mmc
 arm/goldfish/goldfish_pic.c			standard
 arm/goldfish/goldfish_timer.c		standard
 arm/goldfish/goldfish_uart.c		standard

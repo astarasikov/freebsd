@@ -25,6 +25,15 @@
 			#interrupt-cells = <1>;
 		};
 
+		/*
+		pdev {
+			compatible = "arm,goldfish-pdev";
+			reg = <0xff001000 0x1000>;
+			interrupts = <1>;
+			interrupt-parent = <&pic>;
+		};
+		*/
+
 		uart0: uart0 {
 			compatible = "arm,goldfish-uart";
 			reg = <0xff002000 0x1000>;
@@ -42,6 +51,35 @@
 			interrupt-parent = <&pic>;
 		};
 
+		mmc@xff005000 {
+			compatible = "arm,goldfish-mmc";
+			reg = <0xff005000 0x1000>;
+			interrupts = <15>;
+			interrupt-parent = <&pic>;
+			non-removable;
+			mmchs-device-id = <1>;
+			max-frequency = <24000000>;
+		};
+
+		/*
+		nand {
+			compatible = "arm,goldfish-nand";
+			reg = <0xff017000 0x1000>;
+			interrupts = <2>;
+			interrupt-parent = <&pic>;
+
+			slice@0 {
+				reg = <0x0 0x200000>;
+				label = "uboot";
+				read-only;
+			};
+
+			slice@200000 {
+				reg = <0x200000 0x100000>;
+				label = "root";
+			};
+		};
+
 		smc {
 			compatible = "smsc,lan91c111";
 			reg = <0xff013000 0x1000>;
@@ -57,11 +95,12 @@
 			interrupts = <14>;
 			interrupt-parent = <&pic>;
 		};
+		*/
 	};
 
 	memory {
 		device_type = "memory";
-		reg = <0x0 0x08000000>; /* 128MB */
+		reg = <0 0x8000000>;
 	};
 
 	aliases {

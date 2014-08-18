@@ -50,9 +50,12 @@ options 	SOFTUPDATES		#Enable FFS soft updates support
 options 	UFS_ACL			#Support for access control lists
 options 	UFS_DIRHASH		#Improve performance on big directories
 
+options 	PSEUDOFS		#Pseudo-filesystem framework
+options 	MSDOSFS			#MSDOS Filesystem
+options 	CD9660			#ISO 9660 Filesystem
+options 	PROCFS			#Process filesystem (requires PSEUDOFS)
 options 	GEOM_PART_BSD		# BSD partition scheme
 options 	GEOM_PART_MBR		# MBR partition scheme
-options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	COMPAT_43		#Compatible with BSD 4.3 [KEEP THIS!]
 options 	KTRACE			#ktrace(1) support
 options 	SYSVSHM			#SYSV-style shared memory
@@ -83,10 +86,10 @@ device 	pty
 
 # NOTE: serial console is disabled if syscons enabled
 # Comment following lines for headless setup
-device 	sc
-device 	kbdmux
-options 	SC_DFLT_FONT    # compile font in
-makeoptions 	SC_DFLT_FONT=cp437
+#device 	sc
+#device 	kbdmux
+#options 	SC_DFLT_FONT    # compile font in
+#makeoptions 	SC_DFLT_FONT=cp437
 
 options	STACK
 makeoptions 	WITH_CTF=1
@@ -107,7 +110,12 @@ options 	NO_SWAPPING
 #options 	WITNESS
 #options 	WITNESS_SKIPSPIN
 
-device 	md
+#options 	KTR
+#options 	KTR_VERBOSE=2
+#options 	KTR_ENTRIES=16384
+#options 	KTR_MASK=(KTR_SPARE2)
+#options 	KTR_COMPILE=KTR_ALL
+
 device 	random		# Entropy device
 
 # Flattened Device Tree
@@ -115,17 +123,9 @@ options 	FDT
 options 	FDT_DTB_STATIC
 makeoptions 	FDT_DTS_FILE=goldfish.dts
 
-options 	MD_ROOT
-options 	MD_ROOT_SIZE=5120
-makeoptions 	MFS_IMAGE=/root/handhelds/myroot.img
-options 	ROOTDEVNAME=\"/dev/md0\"
+device mmc
+device mmcsd
+device sdhci
+options ROOTDEVNAME=\"ufs:/dev/mmcsd0s2a\"
 
-#boot from NFS
-#options 	NFSCL
-#options 	NFSCLIENT
-#options 	NFS_ROOT
-#options 	BOOTP_COMPAT
-#options 	BOOTP
-#options 	BOOTP_NFSV3
-#options 	BOOTP_WIRED_TO=smc0
-#options 	ROOTDEVNAME=\"nfs:192.168.1.51:/srv/nfs3/bsd/\"
+device 	md

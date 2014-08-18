@@ -59,7 +59,7 @@ enum {
 	GOLDFISH_TIMER_CLEAR_ALARM = 0x14,
 };
 
-#define CLOCK_TICK_RATE (1000 * 1000 * 1000)
+#define CLOCK_TICK_RATE (1000 * 1000)
 
 struct goldfish_timer_softc {
 	struct resource*	mem_res;
